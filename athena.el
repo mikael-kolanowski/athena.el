@@ -36,12 +36,6 @@
 ;; example call - (get-character 'alpha :breathing 'smooth :accent 'acute)
 ;; (cl-defun get-greek-letter (name case &key (breathing nil) (accent nil) (diearesis nil) ()))
 
-(defun get-unicode-name (letter-name case)
-  (format "GREEK %s LETTER %s"
-          (if (eq case 'capital)
-              "CAPITAL"
-            "SMALL")
-          (upcase (symbol-name letter-name))))
 
 ;; smooth breathing - PSILI
 ;; rough breathing - DASIA
@@ -50,43 +44,42 @@
 ;; circumflex - PERISPOMENI
 ;; iota - YPOGEGRAMMENI
 ;;      - PROSGEGRAMMENI if capital wtf...
-(cl-defun diacritics-string
-    (letter-case &key
-                 (breathing nil)
-                 (accent nil)
-                 (diaeresis nil)
-                 (iota-subscriptum nil))
-  (setq diacritics (list (cond
-                          ((eq breathing 'smooth) "PSILI")
-                          ((eq breathing 'rough) "DASIA"))
-                         (when diaeresis "DIALYTIKA")
-                         (cond
-                          ((eq accent 'acute) "OXIA")
-                          ((eq accent 'grave) "VARIA")
-                          ((eq accent 'circumflex) "PERISPOMENI"))
-                         (when iota-subscriptum
-                           (if (eq letter-case 'small)
-                               "YPOGEGRAMMENI"
-                             "PROSGEGRAMMENI"))))
-  (string-join (remove nil diacritics)
-               " AND "))
-
-(cl-defun get-greek-letter-name
+(cl-defun unicode-name
     (letter-case letter-name
                  &key
                  (breathing nil)
                  (accent nil)
                  (diaeresis nil)
-                 iota-subscriptum
-                 nil)
-  (if (not (or breathing accent diaeresis iota-subscriptum))
-      (get-unicode-name letter-name letter-case)
-    (format "%s WITH %s"
-            (get-unicode-name letter-name letter-case)
-            (diacritics-string letter-case :breathing breathing
-                               :accent accent
-                               :diaeresis diaeresis
-                               :iota-subscriptum iota-subscriptum))))
+                 (final t)
+                 (iota-subscriptum nil))
+  "Get the Unicode name of the Greek character corresponding to the provided properties"
+  (let ((has-diacritics (or breathing accent diaeresis iota-subscriptum))
+        (is-final-sigma (and (eq letter-name 'sigma)
+                             (not (eq letter-case 'capital))
+                             final))
+        (diacritics (s-join " AND "
+                            (remove nil
+                                    (list (case breathing
+                                            (smooth "PSILI")
+                                            (rough "DASIA"))
+                                          (case accent
+                                            (acute "OXIA")
+                                            (grave "VARIA")
+                                            (circumflex "PERISPOMENI"))
+                                          (when iota-subscriptum
+                                            (if (eq letter-case 'small)
+                                                "YPOGEGRAMMENI"
+                                              "PROSGEGRAMMENI")))))))
+    (cond
+     (is-final-sigma "GREEK SMALL LETTER FINAL SIGMA")
+     ((not has-diacritics)
+      (format "GREEK %s LETTER %s"
+              (upcase (symbol-name letter-case))
+              (upcase (symbol-name letter-name))))
+     (t (format "GREEK %s LETTER %s WITH %s"
+                (upcase (symbol-name letter-case))
+                (upcase (symbol-name letter-name))
+                diacritics)))))
 
 (setq holy-regex "[aeiouyhwbgdzqklmnxprstfc][\\(\\)]?\\+?[\\/\\\]?j?")
 

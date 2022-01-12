@@ -27,7 +27,9 @@
                               ("w" . omega)))
 
 (defun get-case (letter)
-  (if (equal letter (downcase letter)) 'small 'capital))
+  (if (equal letter (downcase letter))
+      'small
+    'capital))
 
 ;; base - the base Greek letter name as a symbol
 ;; breathing - 'smooth, 'rough or nil
@@ -110,16 +112,21 @@
 (defun hellenize-word (string)
   (s-join ""
           (mapcar (lambda (properties)
-                    (char-to-string (char-from-name (apply #'get-greek-letter-name properties))))
+                    (char-to-string (char-from-name (apply #'unicode-name properties))))
                   (parse string))))
- 
+
 (defun hellenize (string)
-  (s-join " " (let ((words (s-split " " string)))
-                (mapcar #'hellenize-word words))))
+  (s-join " "
+          (let ((words (s-split " " string)))
+            (mapcar #'hellenize-word words))))
 
 
 (defun hellenize-region ()
   (interactive)
-  (let* ((region (buffer-substring (region-beginning) (region-end)))
+  (let* ((region (buffer-substring (region-beginning)
+                                   (region-end)))
          (hellenized (hellenize region)))
-    (replace-region-contents (region-beginning) (region-end) (lambda () (hellenize region)))))
+    (replace-region-contents (region-beginning)
+                             (region-end)
+                             (lambda ()
+                               (hellenize region)))))

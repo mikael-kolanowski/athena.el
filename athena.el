@@ -52,7 +52,7 @@
                  (breathing nil)
                  (accent nil)
                  (diaeresis nil)
-                 (final t)
+                 (final nil)
                  (iota-subscriptum nil))
   "Get the Unicode name of the Greek character corresponding to the provided properties"
   (let ((has-diacritics (or breathing accent diaeresis iota-subscriptum))
@@ -83,50 +83,61 @@
                 (upcase (symbol-name letter-name))
                 diacritics)))))
 
-(setq holy-regex "[aeiouyhwbgdzqklmnxprstfc][\\(\\)]?\\+?[\\/\\\]?j?")
+(setq holy-regex "[aeiouyhwbgdzqklmnxprstfcAEIOUYHWBGDZQKLMNXPRSTFC][\\(\\)]?\\+?[\\/\\\]?j?")
+
+(defun parse-word (string)
+  (let ((splitting-regex (rx "aeiouyhwbgdzqklmnxprstfc")))
+    (mapcar (lambda (group)
+              (let* ((first-char (substring group 0 1))
+                     (letter-case (get-case first-char))
+                     (greek-letter (cdr (assoc (downcase first-char) latin-to-greek-lookup)))
+                     (letter-properties (list letter-case greek-letter)))
+                (progn
+                  (when (s-contains-p ")" group)
+                    (setq letter-properties (plist-put letter-properties :breathing 'smooth)))
+                  (when (s-contains-p "(" group)
+                    (setq letter-properties (plist-put letter-properties :breathing 'rough)))
+                  (when (s-contains-p "+" group)
+                    (setq letter-properties (plist-put letter-properties :diaeresis t)))
+                  (when (s-contains-p "/" group)
+                    (setq letter-properties (plist-put letter-properties :accent 'acute)))
+                  (when (s-contains-p "\\" group)
+                    (setq letter-properties (plist-put letter-properties :accent 'grave)))
+                  (when (s-contains-p "^" group)
+                    (setq letter-properties (plist-put letter-properties :accent 'circumflex)))
+                  (when (s-contains-p "j" group)
+                    (setq letter-properties (plist-put letter-properties :iota-subscriptum t)))
+                  letter-properties)))
+            (s-slice-at holy-regex string))))
 
 (defun parse (string)
-  (mapcar (lambda (group)
-            (let* ((first-char (substring group 0 1))
-                   (letter-case (get-case first-char))
-                   (greek-letter (cdr (assoc first-char latin-to-greek-lookup)))
-                   (letter-properties (list letter-case greek-letter)))
-              (progn
-                (when (s-contains-p ")" group)
-                  (setq letter-properties (plist-put letter-properties :breathing 'smooth)))
-                (when (s-contains-p "(" group)
-                  (setq letter-properties (plist-put letter-properties :breathing 'rough)))
-                (when (s-contains-p "+" group)
-                  (setq letter-properties (plist-put letter-properties :diaeresis t)))
-                (when (s-contains-p "/" group)
-                  (setq letter-properties (plist-put letter-properties :accent 'acute)))
-                (when (s-contains-p "\\" group)
-                  (setq letter-properties (plist-put letter-properties :accent 'grave)))
-                (when (s-contains-p "^" group)
-                  (setq letter-properties (plist-put letter-properties :accent 'circumflex)))
-                (when (s-contains-p "j" group)
-                  (setq letter-properties (plist-put letter-properties :iota-subscriptum t)))
-                letter-properties)))
-          (s-slice-at holy-regex string)))
-
-(defun hellenize-word (string)
-  (s-join ""
-          (mapcar (lambda (properties)
-                    (char-to-string (char-from-name (apply #'unicode-name properties))))
-                  (parse string))))
+  (let ((words (s-split "\s+" string)))
+    (->> words
+         (-map #'parse-word)
+         ;; Set the FINAL key if the last letter in a word is sigma
+         (--map (--map-last (eq (elt it 1) 'sigma)
+                            (plist-put it :final t)
+                            it)))))
 
 (defun hellenize (string)
-  (s-join " "
-          (let ((words (s-split " " string)))
-            (mapcar #'hellenize-word words))))
+  (->> string
+       parse
+       (-map (lambda (word)
+               (->> word
+                    (--map (apply #'unicode-name it))
+                    (-map #'char-from-name)
+                    (-map #'char-to-string)
+                    (s-join ""))))
+       (s-join " ")))
 
-
-(defun hellenize-region ()
-  (interactive)
-  (let* ((region (buffer-substring (region-beginning)
-                                   (region-end)))
-         (hellenized (hellenize region)))
-    (replace-region-contents (region-beginning)
-                             (region-end)
+(defun hellenize-region (start end)
+  (interactive "r")
+  (let ((substring (buffer-substring start end)))
+    (replace-region-contents start
+                             end
                              (lambda ()
-                               (hellenize region)))))
+                               (hellenize substring)))))
+
+(defun insert-polytonic-greek-text (string)
+  (interactive "sEnter text to transliterate: ")
+  (insert (hellenize string)))
